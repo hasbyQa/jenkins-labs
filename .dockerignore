@@ -1,0 +1,15 @@
+# Don't copy build output into the image — Maven rebuilds inside the container
+target/
+
+# IDE files — not needed inside Docker
+.idea/
+*.iml
+.vscode/
+
+# Git history — not needed inside Docker
+.git/
+.gitignore
+
+# Docker files themselves
+Dockerfile
+.dockerignore

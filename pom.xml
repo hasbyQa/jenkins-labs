@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ============================================================
+         PROJECT IDENTITY
+         groupId   : reverse domain — acts as a namespace
+         artifactId: the project/jar name
+         version   : current version of this project
+    ============================================================ -->
+    <groupId>com.swaglabs</groupId>
+    <artifactId>swag-labs-tests</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Swag Labs Docker Test Suite</name>
+    <description>
+        Automated UI tests for Swag Labs (saucedemo.com) using
+        Selenium WebDriver and JUnit 5, containerized with Docker.
+    </description>
+
+    <!-- ============================================================
+         GLOBAL PROPERTIES
+         Define versions in one place — easy to upgrade later
+    ============================================================ -->
+    <properties>
+        <!-- Java version -->
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Dependency versions — change here to upgrade everywhere -->
+        <selenium.version>4.18.1</selenium.version>
+        <junit.version>5.10.2</junit.version>
+        <webdrivermanager.version>5.7.0</webdrivermanager.version>
+        <maven.surefire.version>3.2.5</maven.surefire.version>
+    </properties>
+
+    <!-- ============================================================
+         DEPENDENCIES
+         Maven downloads these from Maven Central automatically.
+         Each <dependency> block = one library.
+    ============================================================ -->
+    <dependencies>
+
+        <!-- ── Selenium WebDriver ──────────────────────────────────
+             The core library that drives the browser.
+             selenium-java includes support for Chrome, Firefox, etc.
+        ─────────────────────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>${selenium.version}</version>
+        </dependency>
+
+        <!-- ── JUnit 5 (Jupiter) API ───────────────────────────────
+             Provides @Test, @BeforeEach, @AfterEach, assertions, etc.
+             'test' scope = only used during testing, not in production
+        ─────────────────────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ── JUnit 5 Engine ──────────────────────────────────────
+             The engine that actually RUNS JUnit 5 tests.
+             Without this, Maven cannot discover or execute tests.
+        ─────────────────────────────────────────────────────────── -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ── WebDriverManager ────────────────────────────────────
+             Automatically downloads the correct ChromeDriver version
+             to match your installed Chrome. No manual setup needed.
+        ─────────────────────────────────────────────────────────── -->
+        <dependency>
+            <groupId>io.github.bonigarcia</groupId>
+            <artifactId>webdrivermanager</artifactId>
+            <version>${webdrivermanager.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ============================================================
+         BUILD PLUGINS
+         Plugins extend Maven's capabilities.
+    ============================================================ -->
+    <build>
+        <plugins>
+
+            <!-- ── Maven Compiler Plugin ───────────────────────────
+                 Tells Maven which Java version to compile with.
+                 Must match the <properties> above.
+            ─────────────────────────────────────────────────────── -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.12.1</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                </configuration>
+            </plugin>
+
+            <!-- ── Maven Surefire Plugin ───────────────────────────
+                 The plugin responsible for running tests.
+                 Version 3.x is required for JUnit 5 support.
+                 useModulePath=false avoids Java module system issues.
+            ─────────────────────────────────────────────────────── -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>
