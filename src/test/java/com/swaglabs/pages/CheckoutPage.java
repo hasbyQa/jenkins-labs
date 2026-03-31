@@ -39,6 +39,7 @@ public class CheckoutPage extends BasePage {
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
         submitFormViaJs();
+        waitForElementVisible(ITEM_TOTAL);
         waitForElementPresent(FINISH_BUTTON);
         return this;
     }
