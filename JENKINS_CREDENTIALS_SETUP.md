@@ -22,9 +22,7 @@ GitHub's push protection detected the hardcoded Slack webhook URL as a secret an
    - Fill in:
      - **Kind**: `Secret text`
      - **Scope**: `Global`
-     - **Secret**: Paste your Slack webhook URL:
-       ```
-       ```
+     - **Secret**: Paste your Slack webhook URL (from https://api.slack.com/apps)
      - **ID**: `slack-webhook-url` (IMPORTANT - must match Jenkinsfile)
      - **Description**: `Slack Webhook for Build Notifications`
 
