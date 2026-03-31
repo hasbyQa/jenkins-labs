@@ -50,26 +50,20 @@ pipeline {
                 try {
                     emailext(
                         subject: "✅ BUILD PASSED: ${JOB_NAME} #${BUILD_NUMBER}",
-                        body: """
-                        BUILD SUCCESSFULLY COMPLETED
+                        body: """BUILD SUCCESSFULLY COMPLETED
 
-                        Job: ${JOB_NAME}
-                        Build Number: ${BUILD_NUMBER}
-                        Status: ✅ SUCCESS
+Job: ${JOB_NAME}
+Build Number: ${BUILD_NUMBER}
+Status: ✅ SUCCESS
 
-                        Branch: ${GIT_BRANCH}
-                        Commit: ${GIT_COMMIT}
-                        
-                        Test Results: All tests passed!
-                        
-                        Build Details: ${BUILD_URL}
-                        Console Output: ${BUILD_URL}console
-                        """.stripIndent(),
+Branch: ${GIT_BRANCH}
+Commit: ${GIT_COMMIT}
+
+Test Results: All tests passed!
+
+Build Details: ${BUILD_URL}
+Console Output: ${BUILD_URL}console""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        recipientProviders: [
-                            developers(),
-                            requestor()
-                        ],
                         mimeType: 'text/plain'
                     )
                     echo '✅ Email notification sent successfully'
@@ -82,30 +76,27 @@ pipeline {
             script {
                 try {
                     withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_HOOK')]) {
-                        httpRequest(
-                            url: "${SLACK_HOOK}",
-                            httpMode: 'POST',
-                            contentType: 'APPLICATION_JSON',
-                            requestBody: """
-                            {
-                                "channel": "#builds",
-                                "username": "Jenkins",
-                                "icon_emoji": ":jenkins:",
-                                "attachments": [
-                                    {
-                                        "color": "#36a64f",
-                                        "title": "✅ BUILD PASSED",
-                                        "fields": [
-                                            {"title": "Job", "value": "${JOB_NAME}", "short": true},
-                                            {"title": "Build", "value": "#${BUILD_NUMBER}", "short": true},
-                                            {"title": "Branch", "value": "${GIT_BRANCH}", "short": true},
-                                            {"title": "Details", "value": "<${BUILD_URL}|View Build>", "short": true}
-                                        ]
-                                    }
+                        sh '''
+                        curl -X POST "${SLACK_HOOK}" \
+                          -H 'Content-Type: application/json' \
+                          -d '{
+                            "channel": "#builds",
+                            "username": "Jenkins",
+                            "icon_emoji": ":jenkins:",
+                            "attachments": [
+                              {
+                                "color": "#36a64f",
+                                "title": "✅ BUILD PASSED",
+                                "fields": [
+                                  {"title": "Job", "value": "'"${JOB_NAME}"'", "short": true},
+                                  {"title": "Build", "value": "#'"${BUILD_NUMBER}"'", "short": true},
+                                  {"title": "Branch", "value": "'"${GIT_BRANCH}"'", "short": true},
+                                  {"title": "Details", "value": "<'"${BUILD_URL}"'|View Build>", "short": true}
                                 ]
-                            }
-                            """
-                        )
+                              }
+                            ]
+                          }'
+                        '''
                     }
                     echo '✅ Slack notification sent successfully'
                 } catch (Exception e) {
@@ -122,27 +113,20 @@ pipeline {
                 try {
                     emailext(
                         subject: "❌ BUILD FAILED: ${JOB_NAME} #${BUILD_NUMBER}",
-                        body: """
-                        BUILD FAILED
+                        body: """BUILD FAILED
 
-                        Job: ${JOB_NAME}
-                        Build Number: ${BUILD_NUMBER}
-                        Status: ❌ FAILURE
+Job: ${JOB_NAME}
+Build Number: ${BUILD_NUMBER}
+Status: ❌ FAILURE
 
-                        Branch: ${GIT_BRANCH}
-                        Commit: ${GIT_COMMIT}
-                        
-                        Build Details: ${BUILD_URL}
-                        Console Output: ${BUILD_URL}console
-                        
-                        Please review the logs and fix the issues.
-                        """.stripIndent(),
+Branch: ${GIT_BRANCH}
+Commit: ${GIT_COMMIT}
+
+Build Details: ${BUILD_URL}
+Console Output: ${BUILD_URL}console
+
+Please review the logs and fix the issues.""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        recipientProviders: [
-                            developers(),
-                            requestor(),
-                            brokenBuildSuspects()
-                        ],
                         mimeType: 'text/plain'
                     )
                     echo '✅ Email notification sent successfully'
@@ -155,30 +139,27 @@ pipeline {
             script {
                 try {
                     withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_HOOK')]) {
-                        httpRequest(
-                            url: "${SLACK_HOOK}",
-                            httpMode: 'POST',
-                            contentType: 'APPLICATION_JSON',
-                            requestBody: """
-                            {
-                                "channel": "#builds",
-                                "username": "Jenkins",
-                                "icon_emoji": ":jenkins:",
-                                "attachments": [
-                                    {
-                                        "color": "#ff0000",
-                                        "title": "❌ BUILD FAILED",
-                                        "fields": [
-                                            {"title": "Job", "value": "${JOB_NAME}", "short": true},
-                                            {"title": "Build", "value": "#${BUILD_NUMBER}", "short": true},
-                                            {"title": "Branch", "value": "${GIT_BRANCH}", "short": true},
-                                            {"title": "Details", "value": "<${BUILD_URL}|View Build>", "short": true}
-                                        ]
-                                    }
+                        sh '''
+                        curl -X POST "${SLACK_HOOK}" \
+                          -H 'Content-Type: application/json' \
+                          -d '{
+                            "channel": "#builds",
+                            "username": "Jenkins",
+                            "icon_emoji": ":jenkins:",
+                            "attachments": [
+                              {
+                                "color": "#ff0000",
+                                "title": "❌ BUILD FAILED",
+                                "fields": [
+                                  {"title": "Job", "value": "'"${JOB_NAME}"'", "short": true},
+                                  {"title": "Build", "value": "#'"${BUILD_NUMBER}"'", "short": true},
+                                  {"title": "Branch", "value": "'"${GIT_BRANCH}"'", "short": true},
+                                  {"title": "Details", "value": "<'"${BUILD_URL}"'|View Build>", "short": true}
                                 ]
-                            }
-                            """
-                        )
+                              }
+                            ]
+                          }'
+                        '''
                     }
                     echo '✅ Slack notification sent successfully'
                 } catch (Exception e) {
