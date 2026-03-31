@@ -1,7 +1,9 @@
 package com.swaglabs.pages;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 
 // Covers all 3 checkout steps:
 //   Step 1 - fill info  (/checkout-step-one.html)
@@ -15,6 +17,7 @@ public class CheckoutPage extends BasePage {
     private static final By POSTAL_CODE      = By.cssSelector("[data-test='postalCode']");
     private static final By CONTINUE_BUTTON  = By.cssSelector("[data-test='continue']");
     private static final By ERROR_MESSAGE    = By.cssSelector("[data-test='error']");
+    private static final By CHECKOUT_FORM    = By.cssSelector(".checkout_info");
 
     // Step 2
     private static final By FINISH_BUTTON = By.cssSelector("[data-test='finish']");
@@ -35,18 +38,8 @@ public class CheckoutPage extends BasePage {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
-        
-        // Submit using standard click on the button
-        // The form submission happens automatically in the React app
+        // Use standard click with proper wait for element to be clickable
         click(CONTINUE_BUTTON);
-        
-        // Add a small wait for the page transition to start
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
         waitForUrlToContain("checkout-step-two");
         return this;
     }
