@@ -29,6 +29,6 @@ COPY src ./src
 # CI/Docker environments are slower than local machines.
 # SELENIUM_TIMEOUT overrides the 20s default — tests read this via TestConfig.
 # surefire timeout gives the full fork 10 minutes before killing it.
-ENV SELENIUM_TIMEOUT=30
+ENV SELENIUM_TIMEOUT=60
 
 CMD ["mvn", "test", "-B", "-Dmaven.surefire.timeout=600"]

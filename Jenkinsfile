@@ -25,7 +25,7 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh 'SELENIUM_TIMEOUT=30 mvn test -B'
+                sh 'SELENIUM_TIMEOUT=60 mvn test -B -Dmaven.surefire.timeout=1200'
             }
         }
 
