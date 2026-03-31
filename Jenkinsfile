@@ -44,10 +44,6 @@ pipeline {
         
         success {
             echo '✅ Build and tests passed!'
-            slackSend(
-                color: 'good',
-                message: "✅ Build #${BUILD_NUMBER} PASSED\nBranch: ${GIT_BRANCH}\nURL: ${BUILD_URL}"
-            )
             emailext(
                 subject: "✅ Build #${BUILD_NUMBER} PASSED - ${JOB_NAME}",
                 body: """
@@ -61,17 +57,13 @@ pipeline {
                     Details: ${BUILD_URL}
                     Console Output: ${BUILD_URL}console
                 """,
-                to: '${DEFAULT_RECIPIENTS}',
+                to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
                 mimeType: 'text/plain'
             )
         }
         
         failure {
             echo '❌ Build or tests failed!'
-            slackSend(
-                color: 'danger',
-                message: "❌ Build #${BUILD_NUMBER} FAILED\nBranch: ${GIT_BRANCH}\nCommit: ${GIT_COMMIT}\nURL: ${BUILD_URL}"
-            )
             emailext(
                 subject: "❌ Build #${BUILD_NUMBER} FAILED - ${JOB_NAME}",
                 body: """
@@ -87,7 +79,7 @@ pipeline {
                     
                     Please check the logs and fix the issues.
                 """,
-                to: '${DEFAULT_RECIPIENTS}',
+                to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
                 mimeType: 'text/plain'
             )
         }

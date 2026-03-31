@@ -17,7 +17,6 @@ public class CheckoutPage extends BasePage {
     private static final By POSTAL_CODE      = By.cssSelector("[data-test='postalCode']");
     private static final By CONTINUE_BUTTON  = By.cssSelector("[data-test='continue']");
     private static final By ERROR_MESSAGE    = By.cssSelector("[data-test='error']");
-    private static final By CHECKOUT_FORM    = By.cssSelector(".checkout_info");
 
     // Step 2
     private static final By FINISH_BUTTON = By.cssSelector("[data-test='finish']");
@@ -38,7 +37,17 @@ public class CheckoutPage extends BasePage {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
-        submitFormViaJs();
+        
+        // Submit form: get the button, click it, and also try to submit any parent form
+        WebElement button = driver.findElement(CONTINUE_BUTTON);
+        ((JavascriptExecutor) driver).executeScript(
+            "arguments[0].click();" +
+            "if(arguments[0].form) { arguments[0].form.submit(); }" +
+            "var forms = document.querySelectorAll('form');" +
+            "if(forms.length > 0) { forms[0].submit(); }",
+            button
+        );
+        
         waitForUrlToContain("checkout-step-two");
         return this;
     }
@@ -57,12 +66,6 @@ public class CheckoutPage extends BasePage {
         jsClick(CONTINUE_BUTTON);
         waitForElementVisible(ERROR_MESSAGE);
         return this;
-    }
-
-    // Submits the checkout form via JavaScript click on the Continue button
-    // The .checkout_info element is a div, not a form, so we click the button instead
-    private void submitFormViaJs() {
-        jsClick(CONTINUE_BUTTON);
     }
 
     public String getErrorMessage() {
