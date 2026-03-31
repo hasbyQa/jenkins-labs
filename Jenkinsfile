@@ -81,18 +81,32 @@ pipeline {
             // Slack notification for success
             script {
                 try {
-                    slackSend(
-                        color: '#36a64f',
-                        channel: '#builds',
-                        message: """
-                        ✅ *BUILD PASSED*
-                        Job: ${JOB_NAME}
-                        Build: #${BUILD_NUMBER}
-                        Branch: ${GIT_BRANCH}
-                        Details: <${BUILD_URL}|View Build>
-                        """.stripIndent(),
-                        tokenCredentialId: 'slack-webhook-url'
-                    )
+                    withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_HOOK')]) {
+                        httpRequest(
+                            url: "${SLACK_HOOK}",
+                            httpMode: 'POST',
+                            contentType: 'APPLICATION_JSON',
+                            requestBody: """
+                            {
+                                "channel": "#builds",
+                                "username": "Jenkins",
+                                "icon_emoji": ":jenkins:",
+                                "attachments": [
+                                    {
+                                        "color": "#36a64f",
+                                        "title": "✅ BUILD PASSED",
+                                        "fields": [
+                                            {"title": "Job", "value": "${JOB_NAME}", "short": true},
+                                            {"title": "Build", "value": "#${BUILD_NUMBER}", "short": true},
+                                            {"title": "Branch", "value": "${GIT_BRANCH}", "short": true},
+                                            {"title": "Details", "value": "<${BUILD_URL}|View Build>", "short": true}
+                                        ]
+                                    }
+                                ]
+                            }
+                            """
+                        )
+                    }
                     echo '✅ Slack notification sent successfully'
                 } catch (Exception e) {
                     echo "⚠️ Slack notification failed: ${e.message}"
@@ -140,18 +154,32 @@ pipeline {
             // Slack notification for failure
             script {
                 try {
-                    slackSend(
-                        color: '#ff0000',
-                        channel: '#builds',
-                        message: """
-                        ❌ *BUILD FAILED*
-                        Job: ${JOB_NAME}
-                        Build: #${BUILD_NUMBER}
-                        Branch: ${GIT_BRANCH}
-                        Details: <${BUILD_URL}|View Build>
-                        """.stripIndent(),
-                        tokenCredentialId: 'slack-webhook-url'
-                    )
+                    withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_HOOK')]) {
+                        httpRequest(
+                            url: "${SLACK_HOOK}",
+                            httpMode: 'POST',
+                            contentType: 'APPLICATION_JSON',
+                            requestBody: """
+                            {
+                                "channel": "#builds",
+                                "username": "Jenkins",
+                                "icon_emoji": ":jenkins:",
+                                "attachments": [
+                                    {
+                                        "color": "#ff0000",
+                                        "title": "❌ BUILD FAILED",
+                                        "fields": [
+                                            {"title": "Job", "value": "${JOB_NAME}", "short": true},
+                                            {"title": "Build", "value": "#${BUILD_NUMBER}", "short": true},
+                                            {"title": "Branch", "value": "${GIT_BRANCH}", "short": true},
+                                            {"title": "Details", "value": "<${BUILD_URL}|View Build>", "short": true}
+                                        ]
+                                    }
+                                ]
+                            }
+                            """
+                        )
+                    }
                     echo '✅ Slack notification sent successfully'
                 } catch (Exception e) {
                     echo "⚠️ Slack notification failed: ${e.message}"
