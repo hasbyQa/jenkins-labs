@@ -64,7 +64,9 @@ Test Results: All tests passed!
 Build Details: ${BUILD_URL}
 Console Output: ${BUILD_URL}console""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        mimeType: 'text/plain'
+                        from: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain',
+                        recipientProviders: [developers(), requestor()]
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
@@ -127,7 +129,9 @@ Console Output: ${BUILD_URL}console
 
 Please review the logs and fix the issues.""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        mimeType: 'text/plain'
+                        from: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain',
+                        recipientProviders: [developers(), requestor(), brokenBuildSuspects()]
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
