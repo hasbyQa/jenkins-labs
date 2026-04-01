@@ -41,6 +41,15 @@ public class CheckoutPage extends BasePage {
         JavascriptExecutor js = (JavascriptExecutor) driver;
         WebElement button = driver.findElement(CONTINUE_BUTTON);
         js.executeScript("arguments[0].click();", button);
+        
+        // Add delay for form submission to complete in headless Docker environment
+        // This is necessary because the form submission and navigation are async
+        try {
+            Thread.sleep(1000);  // 1 second delay for form processing
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
         waitForUrlToContain("checkout-step-two");
         return this;
     }
