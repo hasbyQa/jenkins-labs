@@ -38,6 +38,17 @@ pipeline {
                 script {
                     sh 'mvn allure:report || true'
                 }
+                
+                // Publish Allure Report
+                publishHTML([
+                    reportDir: 'target/site/allure-report',
+                    reportFiles: 'index.html',
+                    reportName: '📊 Allure Test Report',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true
+                ])
+                
+                echo '✅ Test reports generated successfully!'
             }
         }
     }
@@ -55,24 +66,41 @@ pipeline {
                 try {
                     emailext(
                         subject: "✅ BUILD PASSED: ${JOB_NAME} #${BUILD_NUMBER}",
-                        body: """BUILD SUCCESSFULLY COMPLETED
+                        body: """BUILD SUCCESSFULLY COMPLETED ✅
 
-Job: ${JOB_NAME}
-Build Number: ${BUILD_NUMBER}
-Status: ✅ SUCCESS
+═══════════════════════════════════════════════════════════
 
-Branch: ${GIT_BRANCH}
-Commit: ${GIT_COMMIT}
+JOB DETAILS:
+  • Job Name: ${JOB_NAME}
+  • Build Number: #${BUILD_NUMBER}
+  • Status: ✅ SUCCESS
+  • Branch: ${GIT_BRANCH}
+  • Commit: ${GIT_COMMIT}
 
-Test Results: All tests passed!
+═══════════════════════════════════════════════════════════
 
-Build Details: ${BUILD_URL}
-Console Output: ${BUILD_URL}console
-Allure Report: ${BUILD_URL}allure""",
-                        recipientList: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        from: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        mimeType: 'text/plain',
-                        replyTo: 'noreply@jenkins.local'
+TEST RESULTS:
+  ✅ All tests passed successfully!
+  
+DETAILED REPORTS:
+  📊 Allure Test Report: ${BUILD_URL}📊_Allure_Test_Report/
+  📈 JUnit Results: ${BUILD_URL}testReport/
+  🔍 Console Output: ${BUILD_URL}console/
+
+═══════════════════════════════════════════════════════════
+
+BUILD ARTIFACTS:
+  • Test Results: Available in Jenkins UI
+  • Detailed Test Logs: Check Allure Report
+  • Build Duration: See Console Output
+
+═══════════════════════════════════════════════════════════
+
+For more details, visit: ${BUILD_URL}
+
+Thank you!""",
+                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain'
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
@@ -121,24 +149,44 @@ Allure Report: ${BUILD_URL}allure""",
                 try {
                     emailext(
                         subject: "❌ BUILD FAILED: ${JOB_NAME} #${BUILD_NUMBER}",
-                        body: """BUILD FAILED
+                        body: """BUILD FAILED ❌
 
-Job: ${JOB_NAME}
-Build Number: ${BUILD_NUMBER}
-Status: ❌ FAILURE
+═══════════════════════════════════════════════════════════
 
-Branch: ${GIT_BRANCH}
-Commit: ${GIT_COMMIT}
+JOB DETAILS:
+  • Job Name: ${JOB_NAME}
+  • Build Number: #${BUILD_NUMBER}
+  • Status: ❌ FAILURE
+  • Branch: ${GIT_BRANCH}
+  • Commit: ${GIT_COMMIT}
 
-Build Details: ${BUILD_URL}
-Console Output: ${BUILD_URL}console
-Allure Report: ${BUILD_URL}allure
+═══════════════════════════════════════════════════════════
 
-Please review the logs and fix the issues.""",
-                        recipientList: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        from: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        mimeType: 'text/plain',
-                        replyTo: 'noreply@jenkins.local'
+TEST RESULTS:
+  ❌ Some tests failed or build encountered errors!
+  
+DETAILED REPORTS & LOGS:
+  📊 Allure Test Report: ${BUILD_URL}📊_Allure_Test_Report/
+  📈 JUnit Results: ${BUILD_URL}testReport/
+  🔍 Console Output: ${BUILD_URL}console/
+
+═══════════════════════════════════════════════════════════
+
+FAILURE ANALYSIS:
+  1. Review the Console Output for error messages
+  2. Check Allure Report for failed test details
+  3. Examine test logs for debugging information
+  
+ACTION REQUIRED:
+  Please review the logs and fix the issues!
+
+═══════════════════════════════════════════════════════════
+
+For more details, visit: ${BUILD_URL}
+
+Need help? Check the detailed test report in Allure!""",
+                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain'
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
