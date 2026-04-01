@@ -33,6 +33,11 @@ pipeline {
             steps {
                 junit 'target/surefire-reports/**/*.xml'
                 archiveArtifacts artifacts: 'target/**', allowEmptyArchive: true
+                
+                // Generate Allure reports
+                script {
+                    sh 'mvn allure:report || true'
+                }
             }
         }
     }
@@ -62,10 +67,12 @@ Commit: ${GIT_COMMIT}
 Test Results: All tests passed!
 
 Build Details: ${BUILD_URL}
-Console Output: ${BUILD_URL}console""",
-                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        from: 'Jenkins <hasbiyallah.umutoniwabo@amalitechtraining.org>',
-                        mimeType: 'text/plain'
+Console Output: ${BUILD_URL}console
+Allure Report: ${BUILD_URL}allure""",
+                        recipientList: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        from: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain',
+                        replyTo: 'noreply@jenkins.local'
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
@@ -125,11 +132,13 @@ Commit: ${GIT_COMMIT}
 
 Build Details: ${BUILD_URL}
 Console Output: ${BUILD_URL}console
+Allure Report: ${BUILD_URL}allure
 
 Please review the logs and fix the issues.""",
-                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        from: 'Jenkins <hasbiyallah.umutoniwabo@amalitechtraining.org>',
-                        mimeType: 'text/plain'
+                        recipientList: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        from: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain',
+                        replyTo: 'noreply@jenkins.local'
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {

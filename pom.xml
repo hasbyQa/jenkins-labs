@@ -90,6 +90,17 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- ── Allure JUnit5 Listener ──────────────────────────────
+             Generates detailed HTML test reports with screenshots,
+             timings, and test history.
+        ─────────────────────────────────────────────────────────── -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+            <version>2.25.0</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <!-- ============================================================
@@ -117,6 +128,7 @@
                  The plugin responsible for running tests.
                  Version 3.x is required for JUnit 5 support.
                  useModulePath=false avoids Java module system issues.
+                 Allure listener generates test reports.
             ─────────────────────────────────────────────────────── -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -124,7 +136,23 @@
                 <version>${maven.surefire.version}</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
+                    <properties>
+                        <property>
+                            <name>listener</name>
+                            <value>io.qameta.allure.junit5.AllureJunit5</value>
+                        </property>
+                    </properties>
                 </configuration>
+            </plugin>
+
+            <!-- ── Allure Maven Plugin ─────────────────────────────
+                 Generates HTML test reports from Allure results.
+                 Run: mvn allure:report
+            ─────────────────────────────────────────────────────── -->
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>2.13.0</version>
             </plugin>
 
         </plugins>
