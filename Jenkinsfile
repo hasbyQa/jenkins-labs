@@ -10,6 +10,10 @@ pipeline {
         githubPush()
     }
 
+    environment {
+        BUILD_DETAILS = "Build #${BUILD_NUMBER} - ${GIT_BRANCH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -39,11 +43,11 @@ pipeline {
                     sh 'mvn allure:report || true'
                 }
                 
-                // Publish Allure Report
+                // Publish Allure Report to Jenkins
                 publishHTML([
                     reportDir: 'target/site/allure-report',
                     reportFiles: 'index.html',
-                    reportName: '📊 Allure Test Report',
+                    reportName: 'Allure Test Report',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
                     allowMissing: false
@@ -56,61 +60,75 @@ pipeline {
 
     post {
         always {
+            script {
+                // Archive test results
+                junit 'target/surefire-reports/**/*.xml', allowEmptyResults: true
+                archiveArtifacts artifacts: 'target/site/allure-report/**', allowEmptyArchive: true
+            }
             cleanWs()
         }
         
         success {
-            echo '✅ Build and tests passed!'
-            
-            // Email notification for success
             script {
+                echo '✅ Build and tests passed!'
+                
+                // Get test summary
+                def testSummary = readFile('target/surefire-reports/TEST-*.xml') ?: 'No test data'
+                
+                // Send Email Notification - SUCCESS
                 try {
-                    emailext(
+                    mail(
                         subject: "✅ BUILD PASSED: ${JOB_NAME} #${BUILD_NUMBER}",
-                        body: """BUILD SUCCESSFULLY COMPLETED ✅
+                        body: """
+BUILD SUCCESSFULLY COMPLETED ✅
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-JOB DETAILS:
-  • Job Name: ${JOB_NAME}
-  • Build Number: #${BUILD_NUMBER}
-  • Status: ✅ SUCCESS
-  • Branch: ${GIT_BRANCH}
-  • Commit: ${GIT_COMMIT}
+🎯 JOB DETAILS:
+   Job Name: ${JOB_NAME}
+   Build Number: #${BUILD_NUMBER}
+   Status: ✅ SUCCESS
+   Branch: ${GIT_BRANCH}
+   Commit: ${GIT_COMMIT}
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-TEST RESULTS:
-  ✅ All tests passed successfully!
-  
-DETAILED REPORTS:
-  📊 Allure Test Report: ${BUILD_URL}📊_Allure_Test_Report/
-  📈 JUnit Results: ${BUILD_URL}testReport/
-  🔍 Console Output: ${BUILD_URL}console/
+✅ TEST RESULTS:
+   All tests passed successfully!
+   Duration: ${currentBuild.durationString}
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-BUILD ARTIFACTS:
-  • Test Results: Available in Jenkins UI
-  • Detailed Test Logs: Check Allure Report
-  • Build Duration: See Console Output
+📊 DETAILED REPORTS AVAILABLE:
+   
+   1. Allure Test Report:
+      ${BUILD_URL}Allure_Test_Report/
+      
+   2. JUnit Test Results:
+      ${BUILD_URL}testReport/
+      
+   3. Build Console Output:
+      ${BUILD_URL}console/
+      
+   4. Artifacts & Logs:
+      ${BUILD_URL}artifact/
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-For more details, visit: ${BUILD_URL}
+🔗 BUILD LINK: ${BUILD_URL}
 
-Thank you!""",
+Thank you!
+""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        mimeType: 'text/plain'
+                        from: 'jenkins@localhost',
+                        charset: 'UTF-8'
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
-                    echo "⚠️ Email notification failed: ${e.message}"
+                    echo "⚠️ Email notification error: ${e.message}"
                 }
-            }
-            
-            // Slack notification for success
-            script {
+                
+                // Send Slack Notification - SUCCESS
                 try {
                     withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_HOOK')]) {
                         sh '''
@@ -118,18 +136,22 @@ Thank you!""",
                           -H 'Content-Type: application/json' \
                           -d '{
                             "channel": "#builds",
-                            "username": "Jenkins",
-                            "icon_emoji": ":jenkins:",
+                            "username": "Jenkins CI/CD",
+                            "icon_emoji": ":green_heart:",
                             "attachments": [
                               {
                                 "color": "#36a64f",
                                 "title": "✅ BUILD PASSED",
+                                "title_link": "'"${BUILD_URL}"'",
                                 "fields": [
                                   {"title": "Job", "value": "'"${JOB_NAME}"'", "short": true},
                                   {"title": "Build", "value": "#'"${BUILD_NUMBER}"'", "short": true},
                                   {"title": "Branch", "value": "'"${GIT_BRANCH}"'", "short": true},
-                                  {"title": "Details", "value": "<'"${BUILD_URL}"'|View Build>", "short": true}
-                                ]
+                                  {"title": "Status", "value": "✅ SUCCESS", "short": true},
+                                  {"title": "Reports", "value": "<'"${BUILD_URL}"'testReport|JUnit> | <'"${BUILD_URL}"'Allure_Test_Report|Allure>", "short": false}
+                                ],
+                                "footer": "Jenkins",
+                                "ts": '"$(date +%s)"'
                               }
                             ]
                           }'
@@ -137,66 +159,85 @@ Thank you!""",
                     }
                     echo '✅ Slack notification sent successfully'
                 } catch (Exception e) {
-                    echo "⚠️ Slack notification failed: ${e.message}"
+                    echo "⚠️ Slack notification error: ${e.message}"
                 }
             }
         }
         
         failure {
-            echo '❌ Build or tests failed!'
-            
-            // Email notification for failure
             script {
+                echo '❌ Build or tests failed!'
+                
+                // Send Email Notification - FAILURE
                 try {
-                    emailext(
+                    mail(
                         subject: "❌ BUILD FAILED: ${JOB_NAME} #${BUILD_NUMBER}",
-                        body: """BUILD FAILED ❌
+                        body: """
+BUILD FAILED ❌
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-JOB DETAILS:
-  • Job Name: ${JOB_NAME}
-  • Build Number: #${BUILD_NUMBER}
-  • Status: ❌ FAILURE
-  • Branch: ${GIT_BRANCH}
-  • Commit: ${GIT_COMMIT}
+🎯 JOB DETAILS:
+   Job Name: ${JOB_NAME}
+   Build Number: #${BUILD_NUMBER}
+   Status: ❌ FAILURE
+   Branch: ${GIT_BRANCH}
+   Commit: ${GIT_COMMIT}
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-TEST RESULTS:
-  ❌ Some tests failed or build encountered errors!
-  
-DETAILED REPORTS & LOGS:
-  📊 Allure Test Report: ${BUILD_URL}📊_Allure_Test_Report/
-  📈 JUnit Results: ${BUILD_URL}testReport/
-  🔍 Console Output: ${BUILD_URL}console/
+❌ TEST RESULTS:
+   Some tests failed or build encountered errors!
+   Duration: ${currentBuild.durationString}
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-FAILURE ANALYSIS:
-  1. Review the Console Output for error messages
-  2. Check Allure Report for failed test details
-  3. Examine test logs for debugging information
-  
-ACTION REQUIRED:
-  Please review the logs and fix the issues!
+📊 DETAILED REPORTS & DIAGNOSTIC INFORMATION:
+   
+   1. Allure Test Report (with failed test details):
+      ${BUILD_URL}Allure_Test_Report/
+      
+   2. JUnit Test Results:
+      ${BUILD_URL}testReport/
+      
+   3. Build Console Output (error messages):
+      ${BUILD_URL}console/
+      
+   4. Complete Build Artifacts:
+      ${BUILD_URL}artifact/
 
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-For more details, visit: ${BUILD_URL}
+🔍 TROUBLESHOOTING STEPS:
 
-Need help? Check the detailed test report in Allure!""",
+   Step 1: Check Console Output
+      Look for error stack traces and failure messages
+      
+   Step 2: Review Failed Tests in Allure
+      Click on failed test to see detailed logs
+      
+   Step 3: Check Test Logs
+      Each test has associated logs in Allure Report
+      
+   Step 4: Fix Issues and Commit
+      Once fixed, push changes to trigger new build
+
+═══════════════════════════════════════════════════════════════
+
+🔗 BUILD LINK: ${BUILD_URL}
+
+Need help? Review the error messages in console output!
+""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
-                        mimeType: 'text/plain'
+                        from: 'jenkins@localhost',
+                        charset: 'UTF-8'
                     )
                     echo '✅ Email notification sent successfully'
                 } catch (Exception e) {
-                    echo "⚠️ Email notification failed: ${e.message}"
+                    echo "⚠️ Email notification error: ${e.message}"
                 }
-            }
-            
-            // Slack notification for failure
-            script {
+                
+                // Send Slack Notification - FAILURE
                 try {
                     withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_HOOK')]) {
                         sh '''
@@ -204,18 +245,23 @@ Need help? Check the detailed test report in Allure!""",
                           -H 'Content-Type: application/json' \
                           -d '{
                             "channel": "#builds",
-                            "username": "Jenkins",
-                            "icon_emoji": ":jenkins:",
+                            "username": "Jenkins CI/CD",
+                            "icon_emoji": ":red_circle:",
                             "attachments": [
                               {
                                 "color": "#ff0000",
                                 "title": "❌ BUILD FAILED",
+                                "title_link": "'"${BUILD_URL}"'",
                                 "fields": [
                                   {"title": "Job", "value": "'"${JOB_NAME}"'", "short": true},
                                   {"title": "Build", "value": "#'"${BUILD_NUMBER}"'", "short": true},
                                   {"title": "Branch", "value": "'"${GIT_BRANCH}"'", "short": true},
-                                  {"title": "Details", "value": "<'"${BUILD_URL}"'|View Build>", "short": true}
-                                ]
+                                  {"title": "Status", "value": "❌ FAILURE", "short": true},
+                                  {"title": "Reports", "value": "<'"${BUILD_URL}"'testReport|JUnit> | <'"${BUILD_URL}"'Allure_Test_Report|Allure>", "short": false},
+                                  {"title": "Action", "value": "Click title link to view details and console output", "short": false}
+                                ],
+                                "footer": "Jenkins",
+                                "ts": '"$(date +%s)"'
                               }
                             ]
                           }'
@@ -223,7 +269,7 @@ Need help? Check the detailed test report in Allure!""",
                     }
                     echo '✅ Slack notification sent successfully'
                 } catch (Exception e) {
-                    echo "⚠️ Slack notification failed: ${e.message}"
+                    echo "⚠️ Slack notification error: ${e.message}"
                 }
             }
         }
