@@ -123,6 +123,8 @@ REPORTS:
 
 Full details: ${BUILD_URL}""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        replyTo: '$DEFAULT_REPLYTO',
+                        from: '$DEFAULT_FROM',
                         mimeType: 'text/plain'
                     )
                     echo "Email notification sent successfully"
@@ -220,6 +222,8 @@ REPORTS:
 
 Full details: ${BUILD_URL}""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        replyTo: '$DEFAULT_REPLYTO',
+                        from: '$DEFAULT_FROM',
                         mimeType: 'text/plain'
                     )
                     echo "Email notification sent successfully"
@@ -322,6 +326,8 @@ REPORTS:
 
 Full details: ${BUILD_URL}""",
                         to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        replyTo: '$DEFAULT_REPLYTO',
+                        from: '$DEFAULT_FROM',
                         mimeType: 'text/plain'
                     )
                     echo "Email notification sent successfully"
