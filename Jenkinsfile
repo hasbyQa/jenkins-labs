@@ -11,12 +11,12 @@ def getTestSummary() {
             def failures = xml.@failures.toInteger()
             def errors = xml.@errors.toInteger()
             def skipped = xml.@skipped.toInteger()
-            
+
             summary.total += total
             summary.passed += (total - failures - errors - skipped)
             summary.failed += (failures + errors)
             summary.skipped += skipped
-            
+
             xml.testcase.each { tc ->
                 if (tc.failure || tc.error) {
                     def error = tc.failure ?: tc.error
@@ -28,9 +28,9 @@ def getTestSummary() {
                 }
             }
         }
-        echo "✅ Summary: total=${summary.total} passed=${summary.passed} failed=${summary.failed} skipped=${summary.skipped}"
+        echo "Summary: total=${summary.total} passed=${summary.passed} failed=${summary.failed} skipped=${summary.skipped}"
     } catch (Exception e) {
-        echo "⚠️  Parse error: ${e.message}"
+        echo "Parse error: ${e.message}"
     }
     return summary
 }
@@ -50,22 +50,22 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo "📥 Checking out code from GitHub..."
+                echo "Checking out code from GitHub..."
                 checkout scm
             }
         }
 
         stage('Build') {
             steps {
-                echo "🔨 Building project with clean compilation..."
+                echo "Building project with clean compilation..."
                 sh 'mvn clean compile -B -q'
-                echo "✅ Build completed successfully"
+                echo "Build completed successfully"
             }
         }
 
         stage('Test') {
             steps {
-                echo "🧪 Running test suite..."
+                echo "Running test suite..."
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     sh 'SELENIUM_TIMEOUT=60 mvn test -B -Dmaven.surefire.timeout=1200'
                 }
@@ -74,52 +74,84 @@ pipeline {
 
         stage('Allure Report') {
             steps {
-                echo "📊 Generating Allure Report..."
+                echo "Generating Allure Report..."
                 sh 'mvn allure:report -B -DskipTests=true || true'
-                
-                // Publish JUnit test results
-                junit testResults: 'target/surefire-reports/**/*.xml', 
+
+                junit testResults: 'target/surefire-reports/**/*.xml',
                       allowEmptyResults: true
-                
-                // Publish Allure Report to Jenkins
+
                 publishHTML([
                     reportDir: 'target/site/allure-report',
                     reportFiles: 'index.html',
-                    reportName: '📊 Allure Test Report',
+                    reportName: 'Allure Test Report',
                     keepAll: true,
                     alwaysLinkToLastBuild: true,
                     allowMissing: true
                 ])
-                
-                // Archive test artifacts
-                archiveArtifacts artifacts: 'target/surefire-reports/**/*.xml, target/allure-results/**', 
+
+                archiveArtifacts artifacts: 'target/surefire-reports/**/*.xml, target/allure-results/**',
                                   allowEmptyArchive: true
-                
-                echo "✅ Allure Report generated and published!"
+
+                echo "Allure Report generated and published!"
             }
         }
     }
 
     post {
         always {
-            echo "🧹 Cleaning workspace..."
+            echo "Cleaning workspace..."
             cleanWs()
         }
-        
+
         success {
             script {
-                echo "========== SUCCESS NOTIFICATIONS =========="
                 def ts = getTestSummary()
                 def passRate = ts.total > 0 ? (int)((ts.passed / ts.total) * 100) : 0
-                def reportUrl = "${BUILD_URL}Allure_Test_Report/"
-                def buildInfo = "🏗️ Build #${env.BUILD_NUMBER} | 📂 Branch: ${env.GIT_BRANCH ?: 'unknown'}"
-                
-                // Slack notification
-                echo "[1/2] Sending Slack notification..."
+
+                // Export to shell environment
+                env.TOTAL_TESTS  = "${ts.total}"
+                env.PASSED_TESTS = "${ts.passed}"
+                env.FAILED_TESTS = "${ts.failed}"
+                env.PASS_RATE    = "${passRate}"
+
+                // ── Email ────────────────────────────────────────────────────
+                try {
+                    emailext(
+                        subject: "BUILD PASSED: ${JOB_NAME} #${BUILD_NUMBER}",
+                        body: """BUILD SUCCESSFULLY COMPLETED
+
+Job Name   : ${JOB_NAME}
+Build      : #${BUILD_NUMBER}
+Status     : SUCCESS
+Branch     : ${env.GIT_BRANCH ?: 'unknown'}
+Commit     : ${env.GIT_COMMIT ?: 'unknown'}
+
+TEST RESULTS:
+  Total   : ${ts.total}
+  Passed  : ${ts.passed}
+  Failed  : ${ts.failed}
+  Skipped : ${ts.skipped}
+  Pass Rate: ${passRate}%
+
+REPORTS:
+  Allure Report : ${BUILD_URL}Allure_Test_Report/
+  JUnit Results : ${BUILD_URL}testReport/
+  Console Output: ${BUILD_URL}console/
+
+Full details: ${BUILD_URL}""",
+                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain'
+                    )
+                    echo "Email notification sent successfully"
+                } catch (Exception e) {
+                    echo "Email notification failed: ${e.message}"
+                }
+
+                // ── Slack ────────────────────────────────────────────────────
                 try {
                     withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_WEBHOOK')]) {
                         sh '''
-                        curl -X POST "${SLACK_WEBHOOK}" \
+                        curl -s -X POST "${SLACK_WEBHOOK}" \
                           -H 'Content-Type: application/json' \
                           -d '{
                             "channel": "#builds",
@@ -130,75 +162,41 @@ pipeline {
                                 "type": "header",
                                 "text": {
                                   "type": "plain_text",
-                                  "text": "✅ BUILD PASSED - Swag Labs Tests",
+                                  "text": "BUILD PASSED - Swag Labs Tests",
                                   "emoji": true
                                 }
                               },
                               {
                                 "type": "section",
                                 "fields": [
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Job:*\\n'"${JOB_NAME}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Build:*\\n#'"${BUILD_NUMBER}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Branch:*\\n'"${GIT_BRANCH}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Status:*\\n✅ SUCCESS"
-                                  }
+                                  {"type": "mrkdwn", "text": "*Job:*\n'"${JOB_NAME}"'"},
+                                  {"type": "mrkdwn", "text": "*Build:*\n#'"${BUILD_NUMBER}"'"},
+                                  {"type": "mrkdwn", "text": "*Branch:*\n'"${GIT_BRANCH}"'"},
+                                  {"type": "mrkdwn", "text": "*Status:*\nSUCCESS"}
                                 ]
                               },
                               {
                                 "type": "section",
                                 "fields": [
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Total Tests:*\\n'"${TOTAL_TESTS}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Passed:*\\n'"${PASSED_TESTS}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Failed:*\\n'"${FAILED_TESTS}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Pass Rate:*\\n'"${PASS_RATE}"'%"
-                                  }
+                                  {"type": "mrkdwn", "text": "*Total Tests:*\n'"${TOTAL_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Passed:*\n'"${PASSED_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Failed:*\n'"${FAILED_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Pass Rate:*\n'"${PASS_RATE}"'%"}
                                 ]
                               },
-                              {
-                                "type": "divider"
-                              },
+                              {"type": "divider"},
                               {
                                 "type": "actions",
                                 "elements": [
                                   {
                                     "type": "button",
-                                    "text": {
-                                      "type": "plain_text",
-                                      "text": "📊 View Allure Report",
-                                      "emoji": true
-                                    },
+                                    "text": {"type": "plain_text", "text": "View Allure Report", "emoji": true},
                                     "url": "'"${BUILD_URL}"'Allure_Test_Report/",
                                     "style": "primary"
                                   },
                                   {
                                     "type": "button",
-                                    "text": {
-                                      "type": "plain_text",
-                                      "text": "🔨 View Jenkins Build",
-                                      "emoji": true
-                                    },
+                                    "text": {"type": "plain_text", "text": "View Jenkins Build", "emoji": true},
                                     "url": "'"${BUILD_URL}"'"
                                   }
                                 ]
@@ -207,41 +205,73 @@ pipeline {
                           }'
                         '''
                     }
-                    echo "✅ Slack notification sent successfully!"
+                    echo "Slack notification sent successfully"
                 } catch (Exception e) {
-                    echo "⚠️  Slack notification failed: ${e.message}"
+                    echo "Slack notification failed: ${e.message}"
                 }
-                
-                echo "[2/2] Archiving artifacts..."
-                archiveArtifacts artifacts: 'target/surefire-reports/**/*.xml, target/allure-results/**', 
-                                  allowEmptyArchive: true
-                
-                echo "========== SUCCESS NOTIFICATIONS COMPLETE =========="
             }
         }
-        
+
         failure {
             script {
-                echo "========== FAILURE NOTIFICATIONS =========="
                 def ts = getTestSummary()
                 def passRate = ts.total > 0 ? (int)((ts.passed / ts.total) * 100) : 0
-                def reportUrl = "${BUILD_URL}Allure_Test_Report/"
-                
-                // Slack notification
-                echo "[1/2] Sending Slack notification..."
+
+                // Export to shell environment
+                env.TOTAL_TESTS  = "${ts.total}"
+                env.PASSED_TESTS = "${ts.passed}"
+                env.FAILED_TESTS = "${ts.failed}"
+                env.PASS_RATE    = "${passRate}"
+
+                // Build failed-test detail string for email
+                def failedTestDetails = ''
+                if (ts.failedTests.size() > 0) {
+                    ts.failedTests.take(10).eachWithIndex { test, idx ->
+                        failedTestDetails += "\n  ${idx + 1}. ${test.name} (${test.className})\n     ${test.message}\n"
+                    }
+                } else {
+                    failedTestDetails = '\n  No test-level detail available — check console output.\n'
+                }
+
+                // ── Email ────────────────────────────────────────────────────
+                try {
+                    emailext(
+                        subject: "BUILD FAILED: ${JOB_NAME} #${BUILD_NUMBER}",
+                        body: """BUILD FAILED
+
+Job Name   : ${JOB_NAME}
+Build      : #${BUILD_NUMBER}
+Status     : FAILURE
+Branch     : ${env.GIT_BRANCH ?: 'unknown'}
+Commit     : ${env.GIT_COMMIT ?: 'unknown'}
+
+TEST RESULTS:
+  Total   : ${ts.total}
+  Passed  : ${ts.passed}
+  Failed  : ${ts.failed}
+  Skipped : ${ts.skipped}
+  Pass Rate: ${passRate}%
+
+FAILED TESTS:${failedTestDetails}
+REPORTS:
+  Allure Report : ${BUILD_URL}Allure_Test_Report/
+  JUnit Results : ${BUILD_URL}testReport/
+  Console Output: ${BUILD_URL}console/
+
+Full details: ${BUILD_URL}""",
+                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain'
+                    )
+                    echo "Email notification sent successfully"
+                } catch (Exception e) {
+                    echo "Email notification failed: ${e.message}"
+                }
+
+                // ── Slack ────────────────────────────────────────────────────
                 try {
                     withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_WEBHOOK')]) {
-                        def failureBlocks = ''
-                        if (ts.failedTests.size() > 0) {
-                            ts.failedTests.take(5).eachWithIndex { test, idx ->
-                                failureBlocks += "*${idx+1}. ${test.name}*\n"
-                                failureBlocks += "_Class: ${test.className}_\n"
-                                failureBlocks += "```${test.message}```\n"
-                            }
-                        }
-                        
                         sh '''
-                        curl -X POST "${SLACK_WEBHOOK}" \
+                        curl -s -X POST "${SLACK_WEBHOOK}" \
                           -H 'Content-Type: application/json' \
                           -d '{
                             "channel": "#builds",
@@ -252,84 +282,46 @@ pipeline {
                                 "type": "header",
                                 "text": {
                                   "type": "plain_text",
-                                  "text": "❌ BUILD FAILED - Swag Labs Tests",
+                                  "text": "BUILD FAILED - Swag Labs Tests",
                                   "emoji": true
                                 }
                               },
                               {
                                 "type": "section",
                                 "fields": [
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Job:*\\n'"${JOB_NAME}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Build:*\\n#'"${BUILD_NUMBER}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Branch:*\\n'"${GIT_BRANCH}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Status:*\\n❌ FAILURE"
-                                  }
+                                  {"type": "mrkdwn", "text": "*Job:*\n'"${JOB_NAME}"'"},
+                                  {"type": "mrkdwn", "text": "*Build:*\n#'"${BUILD_NUMBER}"'"},
+                                  {"type": "mrkdwn", "text": "*Branch:*\n'"${GIT_BRANCH}"'"},
+                                  {"type": "mrkdwn", "text": "*Status:*\nFAILURE"}
                                 ]
                               },
                               {
                                 "type": "section",
                                 "fields": [
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Total Tests:*\\n'"${TOTAL_TESTS}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Passed:*\\n'"${PASSED_TESTS}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Failed:*\\n'"${FAILED_TESTS}"'"
-                                  },
-                                  {
-                                    "type": "mrkdwn",
-                                    "text": "*Pass Rate:*\\n'"${PASS_RATE}"'%"
-                                  }
+                                  {"type": "mrkdwn", "text": "*Total Tests:*\n'"${TOTAL_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Passed:*\n'"${PASSED_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Failed:*\n'"${FAILED_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Pass Rate:*\n'"${PASS_RATE}"'%"}
                                 ]
                               },
-                              {
-                                "type": "divider"
-                              },
+                              {"type": "divider"},
                               {
                                 "type": "actions",
                                 "elements": [
                                   {
                                     "type": "button",
-                                    "text": {
-                                      "type": "plain_text",
-                                      "text": "📊 View Allure Report",
-                                      "emoji": true
-                                    },
+                                    "text": {"type": "plain_text", "text": "View Allure Report", "emoji": true},
                                     "url": "'"${BUILD_URL}"'Allure_Test_Report/",
                                     "style": "danger"
                                   },
                                   {
                                     "type": "button",
-                                    "text": {
-                                      "type": "plain_text",
-                                      "text": "🔍 View Build Logs",
-                                      "emoji": true
-                                    },
+                                    "text": {"type": "plain_text", "text": "View Build Logs", "emoji": true},
                                     "url": "'"${BUILD_URL}"'console"
                                   },
                                   {
                                     "type": "button",
-                                    "text": {
-                                      "type": "plain_text",
-                                      "text": "📈 Test Results",
-                                      "emoji": true
-                                    },
+                                    "text": {"type": "plain_text", "text": "Test Results", "emoji": true},
                                     "url": "'"${BUILD_URL}"'testReport"
                                   }
                                 ]
@@ -338,16 +330,133 @@ pipeline {
                           }'
                         '''
                     }
-                    echo "✅ Slack failure notification sent!"
+                    echo "Slack notification sent successfully"
                 } catch (Exception e) {
-                    echo "⚠️  Slack notification failed: ${e.message}"
+                    echo "Slack notification failed: ${e.message}"
                 }
-                
-                echo "[2/2] Archiving artifacts..."
-                archiveArtifacts artifacts: 'target/surefire-reports/**/*.xml, target/allure-results/**', 
-                                  allowEmptyArchive: true
-                
-                echo "========== FAILURE NOTIFICATIONS COMPLETE =========="
+            }
+        }
+
+        unstable {
+            script {
+                def ts = getTestSummary()
+                def passRate = ts.total > 0 ? (int)((ts.passed / ts.total) * 100) : 0
+
+                env.TOTAL_TESTS  = "${ts.total}"
+                env.PASSED_TESTS = "${ts.passed}"
+                env.FAILED_TESTS = "${ts.failed}"
+                env.PASS_RATE    = "${passRate}"
+
+                def failedTestDetails = ''
+                if (ts.failedTests.size() > 0) {
+                    ts.failedTests.take(10).eachWithIndex { test, idx ->
+                        failedTestDetails += "\n  ${idx + 1}. ${test.name} (${test.className})\n     ${test.message}\n"
+                    }
+                } else {
+                    failedTestDetails = '\n  No test-level detail available.\n'
+                }
+
+                // ── Email ────────────────────────────────────────────────────
+                try {
+                    emailext(
+                        subject: "BUILD UNSTABLE: ${JOB_NAME} #${BUILD_NUMBER}",
+                        body: """BUILD UNSTABLE - Some Tests Failed
+
+Job Name   : ${JOB_NAME}
+Build      : #${BUILD_NUMBER}
+Status     : UNSTABLE
+Branch     : ${env.GIT_BRANCH ?: 'unknown'}
+Commit     : ${env.GIT_COMMIT ?: 'unknown'}
+
+TEST RESULTS:
+  Total   : ${ts.total}
+  Passed  : ${ts.passed}
+  Failed  : ${ts.failed}
+  Skipped : ${ts.skipped}
+  Pass Rate: ${passRate}%
+
+FAILED TESTS:${failedTestDetails}
+REPORTS:
+  Allure Report : ${BUILD_URL}Allure_Test_Report/
+  JUnit Results : ${BUILD_URL}testReport/
+  Console Output: ${BUILD_URL}console/
+
+Full details: ${BUILD_URL}""",
+                        to: 'hasbiyallah.umutoniwabo@amalitechtraining.org',
+                        mimeType: 'text/plain'
+                    )
+                    echo "Email notification sent successfully"
+                } catch (Exception e) {
+                    echo "Email notification failed: ${e.message}"
+                }
+
+                // ── Slack ────────────────────────────────────────────────────
+                try {
+                    withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_WEBHOOK')]) {
+                        sh '''
+                        curl -s -X POST "${SLACK_WEBHOOK}" \
+                          -H 'Content-Type: application/json' \
+                          -d '{
+                            "channel": "#builds",
+                            "username": "Jenkins Bot",
+                            "icon_emoji": ":jenkins:",
+                            "blocks": [
+                              {
+                                "type": "header",
+                                "text": {
+                                  "type": "plain_text",
+                                  "text": "BUILD UNSTABLE - Swag Labs Tests",
+                                  "emoji": true
+                                }
+                              },
+                              {
+                                "type": "section",
+                                "fields": [
+                                  {"type": "mrkdwn", "text": "*Job:*\n'"${JOB_NAME}"'"},
+                                  {"type": "mrkdwn", "text": "*Build:*\n#'"${BUILD_NUMBER}"'"},
+                                  {"type": "mrkdwn", "text": "*Branch:*\n'"${GIT_BRANCH}"'"},
+                                  {"type": "mrkdwn", "text": "*Status:*\nUNSTABLE"}
+                                ]
+                              },
+                              {
+                                "type": "section",
+                                "fields": [
+                                  {"type": "mrkdwn", "text": "*Total Tests:*\n'"${TOTAL_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Passed:*\n'"${PASSED_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Failed:*\n'"${FAILED_TESTS}"'"},
+                                  {"type": "mrkdwn", "text": "*Pass Rate:*\n'"${PASS_RATE}"'%"}
+                                ]
+                              },
+                              {"type": "divider"},
+                              {
+                                "type": "actions",
+                                "elements": [
+                                  {
+                                    "type": "button",
+                                    "text": {"type": "plain_text", "text": "View Allure Report", "emoji": true},
+                                    "url": "'"${BUILD_URL}"'Allure_Test_Report/",
+                                    "style": "danger"
+                                  },
+                                  {
+                                    "type": "button",
+                                    "text": {"type": "plain_text", "text": "View Build Logs", "emoji": true},
+                                    "url": "'"${BUILD_URL}"'console"
+                                  },
+                                  {
+                                    "type": "button",
+                                    "text": {"type": "plain_text", "text": "Test Results", "emoji": true},
+                                    "url": "'"${BUILD_URL}"'testReport"
+                                  }
+                                ]
+                              }
+                            ]
+                          }'
+                        '''
+                    }
+                    echo "Slack notification sent successfully"
+                } catch (Exception e) {
+                    echo "Slack notification failed: ${e.message}"
+                }
             }
         }
     }
