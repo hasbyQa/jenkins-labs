@@ -30,15 +30,20 @@ public class CheckoutPage extends BasePage {
         super(driver);
     }
 
-    // Types all fields then submits via JS form.submit() — bypasses click event
-    // issues in headless Chrome where button clicks don't reliably trigger navigation
+    // Types all fields then clicks Continue via a bubbling MouseEvent.
+    // form.submit() bypasses React's synthetic event system (Swag Labs is a React app)
+    // and submits as a raw GET request that stays on the same page.
+    // dispatchEvent with bubbles:true triggers React's onClick handler correctly.
     public CheckoutPage fillInfo(String firstName, String lastName, String postalCode) {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
         JavascriptExecutor js = (JavascriptExecutor) driver;
-        WebElement input = driver.findElement(FIRST_NAME_INPUT);
-        js.executeScript("arguments[0].form.submit();", input);
+        WebElement button = driver.findElement(CONTINUE_BUTTON);
+        js.executeScript(
+            "arguments[0].dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, view:window}))",
+            button
+        );
         waitForUrlToContain("checkout-step-two");
         return this;
     }
