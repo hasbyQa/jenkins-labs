@@ -30,31 +30,15 @@ public class CheckoutPage extends BasePage {
         super(driver);
     }
 
-    // Types all fields then submits the form via JavaScript form.submit()
-    // This is the most reliable approach in headless Chrome Docker environments
-    // where <input type="submit"> click events don't always fire form submission
+    // Types all fields then submits via JS form.submit() — bypasses click event
+    // issues in headless Chrome where button clicks don't reliably trigger navigation
     public CheckoutPage fillInfo(String firstName, String lastName, String postalCode) {
         type(FIRST_NAME_INPUT, firstName);
         type(LAST_NAME_INPUT, lastName);
         type(POSTAL_CODE, postalCode);
-        // Use JavaScript to click the button - most reliable in headless environment
         JavascriptExecutor js = (JavascriptExecutor) driver;
-        WebElement button = driver.findElement(CONTINUE_BUTTON);
-        js.executeScript("arguments[0].click();", button);
-        
-        // CRITICAL: Add 2-second delay for form submission to complete in headless Docker environment
-        // The form submission is asynchronous and headless Chrome requires significant wait time
-        // Previous 1-second delay was insufficient - increasing to 2 seconds for reliability
-        try {
-            long startTime = System.currentTimeMillis();
-            Thread.sleep(2000);  // 2 second delay - REQUIRED for headless Chrome form processing
-            long elapsedTime = System.currentTimeMillis() - startTime;
-            System.out.println("✅ Form submission delay completed: " + elapsedTime + "ms");
-        } catch (InterruptedException e) {
-            System.out.println("⚠️ Form submission delay was interrupted!");
-            Thread.currentThread().interrupt();
-        }
-        
+        WebElement input = driver.findElement(FIRST_NAME_INPUT);
+        js.executeScript("arguments[0].form.submit();", input);
         waitForUrlToContain("checkout-step-two");
         return this;
     }

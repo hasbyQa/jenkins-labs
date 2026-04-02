@@ -1,31 +1,15 @@
 #!/usr/bin/env groovy
 
-// ── Read test summary from Jenkins' already-parsed JUnit results ──────────────
-// Uses currentBuild.testResultAction populated by the junit() step — no XML
-// file parsing needed, works regardless of workspace state.
+// ── Read test counts stored by the Reports stage ─────────────────────────────
+// Counts are set as env vars by the junit() step return value in Reports stage,
+// so they are always available in post blocks without sandbox restrictions.
 def getTestSummary() {
-    def summary = [total: 0, passed: 0, failed: 0, skipped: 0, failedTests: []]
-    try {
-        def tr = currentBuild.testResultAction
-        if (tr != null) {
-            summary.total   = tr.totalCount
-            summary.failed  = tr.failCount
-            summary.skipped = tr.skipCount
-            summary.passed  = summary.total - summary.failed - summary.skipped
-
-            tr.failedTests.each { test ->
-                summary.failedTests << [
-                    name     : test.name,
-                    className: test.className?.tokenize('.')?.last() ?: 'Unknown',
-                    message  : test.errorDetails?.take(300) ?: 'No message'
-                ]
-            }
-        }
-        echo "Summary: total=${summary.total} passed=${summary.passed} failed=${summary.failed} skipped=${summary.skipped}"
-    } catch (Exception e) {
-        echo "Parse error: ${e.message}"
-    }
-    return summary
+    return [
+        total  : (env.TOTAL_TESTS  ?: '0').toInteger(),
+        passed : (env.PASSED_TESTS ?: '0').toInteger(),
+        failed : (env.FAILED_TESTS ?: '0').toInteger(),
+        skipped: (env.SKIPPED_TESTS ?: '0').toInteger()
+    ]
 }
 
 pipeline {
@@ -69,9 +53,21 @@ pipeline {
             steps {
                 echo "Publishing test reports..."
 
-                // Publish JUnit results
-                junit testResults: 'target/surefire-reports/**/*.xml',
-                      allowEmptyResults: true
+                // Publish JUnit results and capture counts into env vars for post blocks.
+                // junit() returns a TestResultSummary — storing here avoids sandbox issues
+                // with currentBuild.testResultAction in post blocks.
+                script {
+                    def results = junit testResults: 'target/surefire-reports/**/*.xml',
+                                        allowEmptyResults: true
+                    env.TOTAL_TESTS   = "${results.totalCount}"
+                    env.FAILED_TESTS  = "${results.failCount}"
+                    env.SKIPPED_TESTS = "${results.skipCount}"
+                    env.PASSED_TESTS  = "${results.totalCount - results.failCount - results.skipCount}"
+                    env.PASS_RATE     = results.totalCount > 0
+                        ? "${(int)(((results.totalCount - results.failCount - results.skipCount) / results.totalCount) * 100)}"
+                        : "0"
+                    echo "Tests: total=${env.TOTAL_TESTS} passed=${env.PASSED_TESTS} failed=${env.FAILED_TESTS} skipped=${env.SKIPPED_TESTS}"
+                }
 
                 // Publish Allure report using the Jenkins Allure plugin.
                 // Requires: Manage Jenkins → Tools → Allure Commandline → name: "allure"
@@ -101,14 +97,6 @@ pipeline {
 
         success {
             script {
-                def ts = getTestSummary()
-                def passRate = ts.total > 0 ? (int)((ts.passed / ts.total) * 100) : 0
-
-                env.TOTAL_TESTS  = "${ts.total}"
-                env.PASSED_TESTS = "${ts.passed}"
-                env.FAILED_TESTS = "${ts.failed}"
-                env.PASS_RATE    = "${passRate}"
-
                 // ── Email ────────────────────────────────────────────────────
                 try {
                     emailext(
@@ -122,11 +110,11 @@ Branch     : ${env.GIT_BRANCH ?: 'unknown'}
 Commit     : ${env.GIT_COMMIT ?: 'unknown'}
 
 TEST RESULTS:
-  Total    : ${ts.total}
-  Passed   : ${ts.passed}
-  Failed   : ${ts.failed}
-  Skipped  : ${ts.skipped}
-  Pass Rate: ${passRate}%
+  Total    : ${env.TOTAL_TESTS ?: '0'}
+  Passed   : ${env.PASSED_TESTS ?: '0'}
+  Failed   : ${env.FAILED_TESTS ?: '0'}
+  Skipped  : ${env.SKIPPED_TESTS ?: '0'}
+  Pass Rate: ${env.PASS_RATE ?: '0'}%
 
 REPORTS:
   Allure Report : ${BUILD_URL}allure/
@@ -205,23 +193,6 @@ Full details: ${BUILD_URL}""",
 
         failure {
             script {
-                def ts = getTestSummary()
-                def passRate = ts.total > 0 ? (int)((ts.passed / ts.total) * 100) : 0
-
-                env.TOTAL_TESTS  = "${ts.total}"
-                env.PASSED_TESTS = "${ts.passed}"
-                env.FAILED_TESTS = "${ts.failed}"
-                env.PASS_RATE    = "${passRate}"
-
-                def failedTestDetails = ''
-                if (ts.failedTests.size() > 0) {
-                    ts.failedTests.take(10).eachWithIndex { test, idx ->
-                        failedTestDetails += "\n  ${idx + 1}. ${test.name} (${test.className})\n     ${test.message}\n"
-                    }
-                } else {
-                    failedTestDetails = '\n  No test-level detail available — check console output.\n'
-                }
-
                 // ── Email ────────────────────────────────────────────────────
                 try {
                     emailext(
@@ -235,13 +206,13 @@ Branch     : ${env.GIT_BRANCH ?: 'unknown'}
 Commit     : ${env.GIT_COMMIT ?: 'unknown'}
 
 TEST RESULTS:
-  Total    : ${ts.total}
-  Passed   : ${ts.passed}
-  Failed   : ${ts.failed}
-  Skipped  : ${ts.skipped}
-  Pass Rate: ${passRate}%
+  Total    : ${env.TOTAL_TESTS ?: '0'}
+  Passed   : ${env.PASSED_TESTS ?: '0'}
+  Failed   : ${env.FAILED_TESTS ?: '0'}
+  Skipped  : ${env.SKIPPED_TESTS ?: '0'}
+  Pass Rate: ${env.PASS_RATE ?: '0'}%
 
-FAILED TESTS:${failedTestDetails}
+
 REPORTS:
   Allure Report : ${BUILD_URL}allure/
   JUnit Results : ${BUILD_URL}testReport/
@@ -324,23 +295,6 @@ Full details: ${BUILD_URL}""",
 
         unstable {
             script {
-                def ts = getTestSummary()
-                def passRate = ts.total > 0 ? (int)((ts.passed / ts.total) * 100) : 0
-
-                env.TOTAL_TESTS  = "${ts.total}"
-                env.PASSED_TESTS = "${ts.passed}"
-                env.FAILED_TESTS = "${ts.failed}"
-                env.PASS_RATE    = "${passRate}"
-
-                def failedTestDetails = ''
-                if (ts.failedTests.size() > 0) {
-                    ts.failedTests.take(10).eachWithIndex { test, idx ->
-                        failedTestDetails += "\n  ${idx + 1}. ${test.name} (${test.className})\n     ${test.message}\n"
-                    }
-                } else {
-                    failedTestDetails = '\n  No test-level detail available.\n'
-                }
-
                 // ── Email ────────────────────────────────────────────────────
                 try {
                     emailext(
@@ -354,13 +308,13 @@ Branch     : ${env.GIT_BRANCH ?: 'unknown'}
 Commit     : ${env.GIT_COMMIT ?: 'unknown'}
 
 TEST RESULTS:
-  Total    : ${ts.total}
-  Passed   : ${ts.passed}
-  Failed   : ${ts.failed}
-  Skipped  : ${ts.skipped}
-  Pass Rate: ${passRate}%
+  Total    : ${env.TOTAL_TESTS ?: '0'}
+  Passed   : ${env.PASSED_TESTS ?: '0'}
+  Failed   : ${env.FAILED_TESTS ?: '0'}
+  Skipped  : ${env.SKIPPED_TESTS ?: '0'}
+  Pass Rate: ${env.PASS_RATE ?: '0'}%
 
-FAILED TESTS:${failedTestDetails}
+
 REPORTS:
   Allure Report : ${BUILD_URL}allure/
   JUnit Results : ${BUILD_URL}testReport/
