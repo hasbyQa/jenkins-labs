@@ -86,32 +86,18 @@ pipeline {
             steps {
                 echo "Publishing test reports..."
 
-                // Generate Allure HTML report from allure-results using Maven plugin
-                sh 'mvn allure:report -B -DskipTests=true || true'
-
-                // Relax Jenkins CSP so Allure's JavaScript renders correctly
-                script {
-                    try {
-                        System.setProperty('hudson.model.DirectoryBrowserSupport.CSP',
-                            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-                            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;")
-                    } catch (Exception e) {
-                        echo "CSP relaxation skipped: ${e.message}"
-                    }
-                }
-
                 // Publish JUnit results
                 junit testResults: 'target/surefire-reports/**/*.xml',
                       allowEmptyResults: true
 
-                // Publish the generated Allure HTML as a Jenkins report
-                publishHTML([
-                    reportDir   : 'target/site/allure-report',
-                    reportFiles : 'index.html',
-                    reportName  : 'Allure Report',
-                    keepAll     : true,
-                    alwaysLinkToLastBuild: true,
-                    allowMissing: true
+                // Publish Allure report using the Jenkins Allure plugin.
+                // Requires: Manage Jenkins → Tools → Allure Commandline → name: "allure"
+                // Report is served at ${BUILD_URL}allure/
+                allure([
+                    commandline        : 'allure',
+                    results            : [[path: 'target/allure-results']],
+                    reportBuildPolicy  : 'ALWAYS',
+                    includeProperties  : false
                 ])
 
                 archiveArtifacts artifacts: 'target/surefire-reports/**/*.xml, target/allure-results/**',
@@ -160,7 +146,7 @@ TEST RESULTS:
   Pass Rate: ${passRate}%
 
 REPORTS:
-  Allure Report : ${BUILD_URL}Allure_Report/
+  Allure Report : ${BUILD_URL}allure/
   JUnit Results : ${BUILD_URL}testReport/
   Console Output: ${BUILD_URL}console/
 
@@ -213,7 +199,7 @@ Full details: ${BUILD_URL}""",
                                   {
                                     "type": "button",
                                     "text": {"type": "plain_text", "text": "View Allure Report", "emoji": true},
-                                    "url": "'"${BUILD_URL}"'Allure_Report/",
+                                    "url": "'"${BUILD_URL}"'allure/",
                                     "style": "primary"
                                   },
                                   {
@@ -274,7 +260,7 @@ TEST RESULTS:
 
 FAILED TESTS:${failedTestDetails}
 REPORTS:
-  Allure Report : ${BUILD_URL}Allure_Report/
+  Allure Report : ${BUILD_URL}allure/
   JUnit Results : ${BUILD_URL}testReport/
   Console Output: ${BUILD_URL}console/
 
@@ -327,7 +313,7 @@ Full details: ${BUILD_URL}""",
                                   {
                                     "type": "button",
                                     "text": {"type": "plain_text", "text": "View Allure Report", "emoji": true},
-                                    "url": "'"${BUILD_URL}"'Allure_Report/",
+                                    "url": "'"${BUILD_URL}"'allure/",
                                     "style": "danger"
                                   },
                                   {
@@ -393,7 +379,7 @@ TEST RESULTS:
 
 FAILED TESTS:${failedTestDetails}
 REPORTS:
-  Allure Report : ${BUILD_URL}Allure_Report/
+  Allure Report : ${BUILD_URL}allure/
   JUnit Results : ${BUILD_URL}testReport/
   Console Output: ${BUILD_URL}console/
 
@@ -446,7 +432,7 @@ Full details: ${BUILD_URL}""",
                                   {
                                     "type": "button",
                                     "text": {"type": "plain_text", "text": "View Allure Report", "emoji": true},
-                                    "url": "'"${BUILD_URL}"'Allure_Report/",
+                                    "url": "'"${BUILD_URL}"'allure/",
                                     "style": "danger"
                                   },
                                   {
