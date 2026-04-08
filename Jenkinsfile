@@ -63,108 +63,126 @@ pipeline {
                         : "0"
                     echo "Tests: total=${env.TOTAL_TESTS} passed=${env.PASSED_TESTS} failed=${env.FAILED_TESTS}"
 
-                    // ── Parse surefire XMLs → failure details for notifications ──
-                    def failRowsHtml   = new StringBuilder()
-                    def failCardsHtml  = new StringBuilder()
-                    def failNamesSlack = new StringBuilder()
+                    // ── Parse surefire XMLs via Python (XmlSlurper blocked by sandbox) ──
+                    // Python outputs one line per failure: FAIL|||bugType|||fullCls|||cls|||tname|||msg|||stack
+                    // Newlines inside stack traces are replaced with __NL__ before printing.
+                    def parseOutput = sh(
+                        script: '''
+python3 << 'PYEOF'
+import glob, xml.etree.ElementTree as ET, sys
 
-                    // findFiles requires Pipeline Utility Steps plugin — use sh instead
-                    def xmlList = sh(
-                        script: 'ls target/surefire-reports/TEST-*.xml 2>/dev/null || true',
+SEP = '|||'
+
+for path in sorted(glob.glob('target/surefire-reports/TEST-*.xml')):
+    try:
+        root = ET.parse(path).getroot()
+        for tc in root.findall('testcase'):
+            for tag in ['failure', 'error']:
+                f = tc.find(tag)
+                if f is None:
+                    continue
+                full_cls = tc.get('classname', '')
+                cls      = full_cls.split('.')[-1]
+                tname    = tc.get('name', '')
+                msg      = (f.get('message') or '').replace(SEP, '|').replace('\\n', ' ').replace('\\r', '')
+                stack    = (f.text or '').strip().replace(SEP, '|').replace('\\n', '__NL__').replace('\\r', '')
+                bug_type = 'Error' if tag == 'error' else 'Assertion Failure'
+                print('FAIL' + SEP + bug_type + SEP + full_cls + SEP + cls + SEP + tname + SEP + msg + SEP + stack)
+    except Exception as ex:
+        sys.stderr.write('parse error: ' + str(ex) + '\\n')
+PYEOF
+''',
                         returnStdout: true
                     ).trim()
 
-                    if (xmlList) {
-                        xmlList.split('\n').each { filePath ->
-                            filePath = filePath.trim()
-                            if (!filePath) return
-                            def suite = new XmlSlurper().parseText(readFile(filePath))
-                        suite.testcase.each { tc ->
-                            def isFailure = tc.failure.size() > 0
-                            def isError   = tc.error.size() > 0
-                            if (!isFailure && !isError) return
+                    def failRowsHtml   = new StringBuilder()
+                    def failCardsHtml  = new StringBuilder()
+                    def failNamesSlack = new StringBuilder()
+                    def buildUrl       = env.BUILD_URL ?: ''
 
-                            def fn       = isFailure ? tc.failure[0] : tc.error[0]
-                            def fullCls  = tc.'@classname'.toString()
-                            def cls      = fullCls.tokenize('.').last()
-                            def tname    = tc.'@name'.toString()
-                            def msg      = fn.'@message'.toString()
-                            def stack    = fn.text().toString().trim()
-                            def bugType  = isError ? 'Error' : 'Assertion Failure'
+                    parseOutput.split('\n').each { line ->
+                        line = line.trim()
+                        if (!line.startsWith('FAIL|||')) return
+                        def parts = line.substring(7).split('\\|\\|\\|', 6)
+                        if (parts.length < 6) return
 
-                            def e = { String s -> s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;') }
-                            def msgEsc   = e(msg.take(300))
-                            def stackEsc = e(stack.take(1500))
+                        def bugType = parts[0]
+                        def fullCls = parts[1]
+                        def cls     = parts[2]
+                        def tname   = parts[3]
+                        def msg     = parts[4]
+                        def stack   = parts[5].replace('__NL__', '\n')
 
-                            // -- Summary table row ----------------------------
-                            failRowsHtml.append(
-                                "<tr>" +
-                                "<td style='padding:8px 12px;border-bottom:1px solid #fce4e4;font-weight:600;'>${cls}</td>" +
-                                "<td style='padding:8px 12px;border-bottom:1px solid #fce4e4;font-family:monospace;font-size:12px;'>${tname}</td>" +
-                                "<td style='padding:8px 12px;border-bottom:1px solid #fce4e4;color:#c62828;'>${msgEsc}</td>" +
-                                "</tr>"
-                            )
+                        def msgEsc   = msg.take(300).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+                        def stackEsc = stack.take(1500).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
 
-                            // -- Detailed bug report card ---------------------
-                            failCardsHtml.append(
-                                "<div style='background:#fff8f8;border-left:4px solid #e53935;border-radius:0 6px 6px 0;" +
-                                "padding:18px 22px;margin-bottom:20px;font-size:13px;line-height:1.6;'>" +
+                        // -- Summary table row --------------------------------
+                        failRowsHtml.append(
+                            "<tr>" +
+                            "<td style='padding:8px 12px;border-bottom:1px solid #fce4e4;font-weight:600;'>${cls}</td>" +
+                            "<td style='padding:8px 12px;border-bottom:1px solid #fce4e4;font-family:monospace;font-size:12px;'>${tname}</td>" +
+                            "<td style='padding:8px 12px;border-bottom:1px solid #fce4e4;color:#c62828;'>${msgEsc}</td>" +
+                            "</tr>"
+                        )
 
-                                "<div style='font-weight:bold;color:#b71c1c;font-size:14px;margin-bottom:14px;'>" +
-                                "&#128030; Bug Report &mdash; ${cls} :: ${tname}</div>" +
+                        // -- Detailed bug report card -------------------------
+                        failCardsHtml.append(
+                            "<div style='background:#fff8f8;border-left:4px solid #e53935;border-radius:0 6px 6px 0;" +
+                            "padding:18px 22px;margin-bottom:20px;font-size:13px;line-height:1.6;'>" +
 
-                                "<table style='width:100%;border-collapse:collapse;'>" +
+                            "<div style='font-weight:bold;color:#b71c1c;font-size:14px;margin-bottom:14px;'>" +
+                            "&#128030; Bug Report &mdash; ${cls} :: ${tname}</div>" +
 
-                                "<tr><td style='width:160px;color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Type</td>" +
-                                "<td style='padding:5px 0;'>${bugType}</td></tr>" +
+                            "<table style='width:100%;border-collapse:collapse;'>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Test Class</td>" +
-                                "<td style='padding:5px 0;font-family:monospace;font-size:12px;'>${fullCls}</td></tr>" +
+                            "<tr><td style='width:160px;color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Type</td>" +
+                            "<td style='padding:5px 0;'>${bugType}</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Test Method</td>" +
-                                "<td style='padding:5px 0;font-family:monospace;font-size:12px;'>${tname}</td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Test Class</td>" +
+                            "<td style='padding:5px 0;font-family:monospace;font-size:12px;'>${fullCls}</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>API Under Test</td>" +
-                                "<td style='padding:5px 0;'><a href='https://fakestoreapi.com'>https://fakestoreapi.com</a></td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Test Method</td>" +
+                            "<td style='padding:5px 0;font-family:monospace;font-size:12px;'>${tname}</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Failure Message</td>" +
-                                "<td style='padding:5px 0;color:#c62828;font-weight:500;'>${msgEsc}</td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>API Under Test</td>" +
+                            "<td style='padding:5px 0;'><a href='https://fakestoreapi.com'>https://fakestoreapi.com</a></td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Steps to Reproduce</td>" +
-                                "<td style='padding:5px 0;'>" +
-                                "1. Clone the repository<br>" +
-                                "2. Ensure Java 17+ and Maven 3.8+ are installed<br>" +
-                                "3. Run: <code style='background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:12px;'>" +
-                                "mvn test -Dtest=${cls}#${tname} -B</code><br>" +
-                                "4. Observe the assertion failure in the Maven Surefire output" +
-                                "</td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Failure Message</td>" +
+                            "<td style='padding:5px 0;color:#c62828;font-weight:500;'>${msgEsc}</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Expected Behaviour</td>" +
-                                "<td style='padding:5px 0;'>Test should pass — assertion should be satisfied by the API response</td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Steps to Reproduce</td>" +
+                            "<td style='padding:5px 0;'>" +
+                            "1. Clone the repository<br>" +
+                            "2. Ensure Java 17+ and Maven 3.8+ are installed<br>" +
+                            "3. Run: <code style='background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:12px;'>" +
+                            "mvn test -Dtest=${cls}#${tname} -B</code><br>" +
+                            "4. Observe the assertion failure in Maven Surefire output" +
+                            "</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Actual Behaviour</td>" +
-                                "<td style='padding:5px 0;color:#c62828;'>${msgEsc}</td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Expected Behaviour</td>" +
+                            "<td style='padding:5px 0;'>Test should pass — assertion should be satisfied by the API response</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Stack Trace</td>" +
-                                "<td style='padding:5px 0;'>" +
-                                "<pre style='background:#1a1a2e;color:#e8e8f0;padding:12px 16px;border-radius:5px;" +
-                                "font-size:11px;overflow:auto;margin:4px 0;white-space:pre-wrap;word-break:break-all;line-height:1.5;'>" +
-                                "${stackEsc}</pre></td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Actual Behaviour</td>" +
+                            "<td style='padding:5px 0;color:#c62828;'>${msgEsc}</td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Allure Report</td>" +
-                                "<td style='padding:5px 0;'><a href='${env.BUILD_URL}allure/'>${env.BUILD_URL}allure/</a></td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Stack Trace</td>" +
+                            "<td style='padding:5px 0;'>" +
+                            "<pre style='background:#1a1a2e;color:#e8e8f0;padding:12px 16px;border-radius:5px;" +
+                            "font-size:11px;overflow:auto;margin:4px 0;white-space:pre-wrap;word-break:break-all;line-height:1.5;'>" +
+                            "${stackEsc}</pre></td></tr>" +
 
-                                "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>JUnit Results</td>" +
-                                "<td style='padding:5px 0;'><a href='${env.BUILD_URL}testReport/'>${env.BUILD_URL}testReport/</a></td></tr>" +
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>Allure Report</td>" +
+                            "<td style='padding:5px 0;'><a href='${buildUrl}allure/'>${buildUrl}allure/</a></td></tr>" +
 
-                                "</table></div>"
-                            )
+                            "<tr><td style='color:#888;padding:5px 0;vertical-align:top;font-weight:600;'>JUnit Results</td>" +
+                            "<td style='padding:5px 0;'><a href='${buildUrl}testReport/'>${buildUrl}testReport/</a></td></tr>" +
 
-                            // -- Slack failure list ---------------------------
-                            failNamesSlack.append("• *${cls}* › `${tname}`\n   _${msg.take(100)}_\n")
-                        }
+                            "</table></div>"
+                        )
+
+                        // -- Slack failure list --------------------------------
+                        failNamesSlack.append("• *${cls}* \u203a `${tname}`\n   _${msg.take(100)}_\n")
                     }
-                    } // end if (xmlList)
 
                     env.FAIL_ROWS_HTML   = failRowsHtml.toString()
                     env.FAIL_CARDS_HTML  = failCardsHtml.toString()
