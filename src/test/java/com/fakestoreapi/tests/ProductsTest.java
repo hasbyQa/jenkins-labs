@@ -43,10 +43,10 @@ public class ProductsTest extends BaseTest {
             .get("/products/1")
         .then()
             .statusCode(200)
-            .body("id", equalTo(1))
+            // INTENTIONAL FAILURE: expecting id=999 to trigger a detailed bug report
+            .body("id", equalTo(999))
             .body("title", not(emptyOrNullString()))
             .body("price", greaterThan(0.0f))
-            // Every product must belong to a category
             .body("category", not(emptyOrNullString()));
     }
 
