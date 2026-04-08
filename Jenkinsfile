@@ -68,8 +68,17 @@ pipeline {
                     def failCardsHtml  = new StringBuilder()
                     def failNamesSlack = new StringBuilder()
 
-                    findFiles(glob: 'target/surefire-reports/TEST-*.xml').each { fw ->
-                        def suite = new XmlSlurper().parseText(readFile(fw.path))
+                    // findFiles requires Pipeline Utility Steps plugin — use sh instead
+                    def xmlList = sh(
+                        script: 'ls target/surefire-reports/TEST-*.xml 2>/dev/null || true',
+                        returnStdout: true
+                    ).trim()
+
+                    if (xmlList) {
+                        xmlList.split('\n').each { filePath ->
+                            filePath = filePath.trim()
+                            if (!filePath) return
+                            def suite = new XmlSlurper().parseText(readFile(filePath))
                         suite.testcase.each { tc ->
                             def isFailure = tc.failure.size() > 0
                             def isError   = tc.error.size() > 0
@@ -155,10 +164,11 @@ pipeline {
                             failNamesSlack.append("• *${cls}* › `${tname}`\n   _${msg.take(100)}_\n")
                         }
                     }
+                    } // end if (xmlList)
 
                     env.FAIL_ROWS_HTML   = failRowsHtml.toString()
                     env.FAIL_CARDS_HTML  = failCardsHtml.toString()
-                    env.FAIL_NAMES_SLACK = failNamesSlack.toString().trim()
+                    env.FAIL_NAMES_SLACK = failNamesSlack.toString().trim() ?: 'No failed tests'
                 }
 
                 allure([
@@ -312,7 +322,7 @@ table.info td.lbl{color:#777;width:36%}
                 def passRate     = env.PASS_RATE    ?: '0'
                 def failRows     = env.FAIL_ROWS_HTML  ?: ''
                 def failCards    = env.FAIL_CARDS_HTML ?: ''
-                def failSlack    = env.FAIL_NAMES_SLACK ?: '_No failure details available_'
+                def failSlack    = env.FAIL_NAMES_SLACK ?: '_No failed tests_'
 
                 def failSection = failRows ? """
 <h3 style="color:#b71c1c;margin:24px 0 12px;">Failed Tests Summary</h3>
@@ -446,7 +456,7 @@ ${failSection}
                 def passRate     = env.PASS_RATE    ?: '0'
                 def failRows     = env.FAIL_ROWS_HTML  ?: ''
                 def failCards    = env.FAIL_CARDS_HTML ?: ''
-                def failSlack    = env.FAIL_NAMES_SLACK ?: '_No failure details available_'
+                def failSlack    = env.FAIL_NAMES_SLACK ?: '_No failed tests_'
 
                 def failSection = failRows ? """
 <h3 style="color:#e65100;margin:24px 0 12px;">Failed Tests Summary</h3>
