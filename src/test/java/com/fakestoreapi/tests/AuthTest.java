@@ -56,8 +56,8 @@ public class AuthTest extends BaseTest {
         .when()
             .post("/auth/login")
         .then()
-            // API returns 400 for unrecognised credentials
-            .statusCode(400)
+            // API returns 401 for unrecognised credentials
+            .statusCode(401)
             .body("token", nullValue());
     }
 }

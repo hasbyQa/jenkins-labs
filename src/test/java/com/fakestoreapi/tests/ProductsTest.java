@@ -133,7 +133,7 @@ public class ProductsTest extends BaseTest {
         .when()
             .post("/products")
         .then()
-            .statusCode(200)
+            .statusCode(201)
             // API assigns a new id to every created product
             .body("id", notNullValue())
             .body("title", equalTo("Test Product"))

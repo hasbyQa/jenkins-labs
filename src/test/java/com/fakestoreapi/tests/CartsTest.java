@@ -85,7 +85,7 @@ public class CartsTest extends BaseTest {
         .when()
             .post("/carts")
         .then()
-            .statusCode(200)
+            .statusCode(201)
             // API assigns an id to every new cart
             .body("id", notNullValue());
     }

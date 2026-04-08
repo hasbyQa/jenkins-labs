@@ -94,7 +94,7 @@ public class UsersTest extends BaseTest {
         .when()
             .post("/users")
         .then()
-            .statusCode(200)
+            .statusCode(201)
             // API assigns a new id to the created user
             .body("id", notNullValue());
     }
@@ -128,7 +128,9 @@ public class UsersTest extends BaseTest {
             .put("/users/1")
         .then()
             .statusCode(200)
-            .body("id", notNullValue());
+            // API echoes back the sent fields; id is not included in PUT /users response
+            .body("username", notNullValue())
+            .body("email", notNullValue());
     }
 
     @Test
